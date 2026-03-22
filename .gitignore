@@ -1,0 +1,18 @@
+# General
+.DS_Store
+Thumbs.db
+
+# Android / Gradle
+android-app/.gradle/
+android-app/.idea/
+android-app/**/build/
+android-app/local.properties
+
+# Node / Electron
+desktop-app/node_modules/
+desktop-app/dist/
+desktop-app/out/
+desktop-app/.cache/
+
+# Logs
+*.log

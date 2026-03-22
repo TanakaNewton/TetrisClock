@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tetris Clock</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        background: transparent;
+        width: 100%;
+        height: 100%;
+      }
+      body {
+        color: #fff;
+        font-family: sans-serif;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: flex-end;
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        -webkit-app-region: drag;
+        user-select: none;
+        padding: 16px;
+      }
+      .clock-container {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        position: relative;
+        transform: translateY(-14px);
+      }
+      .digit-bg {
+        position: absolute;
+        left: -8px;
+        right: -8px;
+        bottom: -8px;
+        height: calc(62.5% + 16px);
+        background: rgba(0, 0, 0, 0.28);
+        border-radius: 12px;
+        z-index: 0;
+      }
+      .clock-container canvas {
+        position: relative;
+        z-index: 1;
+      }
+      canvas {
+        /* キャンバス自体は完全に透過 */
+        background-color: transparent;
+        width: 120px;
+        height: 320px;
+      }
+      /* コロンの幅（横4マス分） */
+      #colon {
+        width: 80px;
+      }
+
+      @media (max-width: 800px) {
+        .clock-container {
+          gap: 8px;
+        }
+        canvas {
+          width: 60px;
+          height: 160px;
+        }
+        #colon {
+          width: 40px;
+        }
+      }
+      @media (orientation: landscape) {
+        .clock-container {
+          transform: translateY(-14px) scale(0.85);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="clock-container" id="container">
+      <div class="digit-bg" aria-hidden="true"></div>
+      <canvas id="digit-h1"></canvas>
+      <canvas id="digit-h2"></canvas>
+      <canvas id="colon"></canvas>
+      <canvas id="digit-m1"></canvas>
+      <canvas id="digit-m2"></canvas>
+    </div>
+
+    <script>
+      // --- JSONデータ ---
+      const numbersData = [
+        {
+          pieces: [
+            { type: "I", x: 0, y: 0, rot: 3, order: 1 },
+            { type: "J", x: 4, y: 0, rot: 3, order: 2 },
+            { type: "S", x: 2, y: 0, rot: 0, order: 3 },
+            { type: "T", x: 1, y: 0, rot: 1, order: 4 },
+            { type: "Z", x: 4, y: 2, rot: 1, order: 5 },
+            { type: "T", x: 0, y: 3, rot: 3, order: 6 },
+            { type: "Z", x: 4, y: 4, rot: 1, order: 7 },
+            { type: "Z", x: 0, y: 5, rot: 3, order: 8 },
+            { type: "T", x: 4, y: 6, rot: 1, order: 9 },
+            { type: "T", x: 0, y: 7, rot: 1, order: 10 },
+            { type: "Z", x: 1, y: 8, rot: 0, order: 11 },
+            { type: "J", x: 3, y: 8, rot: 2, order: 12 },
+          ],
+        },
+        {
+          pieces: [
+            { type: "I", x: 4, y: 0, rot: 1, order: 1 },
+            { type: "I", x: 5, y: 0, rot: 1, order: 2 },
+            { type: "L", x: 4, y: 4, rot: 1, order: 3 },
+            { type: "L", x: 4, y: 5, rot: 3, order: 4 },
+            { type: "O", x: 4, y: 8, rot: 0, order: 5 },
+          ],
+        },
+        {
+          pieces: [
+            { type: "I", x: 1, y: 0, rot: 0, order: 1 },
+            { type: "I", x: 0, y: 0, rot: 3, order: 2 },
+            { type: "J", x: 3, y: 0, rot: 2, order: 3 },
+            { type: "L", x: 1, y: 1, rot: 1, order: 4 },
+            { type: "I", x: 1, y: 4, rot: 0, order: 5 },
+            { type: "L", x: 0, y: 4, rot: 2, order: 6 },
+            { type: "J", x: 3, y: 4, rot: 2, order: 7 },
+            { type: "O", x: 4, y: 6, rot: 0, order: 8 },
+            { type: "I", x: 1, y: 8, rot: 0, order: 9 },
+            { type: "L", x: 0, y: 8, rot: 2, order: 10 },
+            { type: "J", x: 3, y: 8, rot: 2, order: 11 },
+          ],
+        },
+        {
+          pieces: [
+            { type: "O", x: 0, y: 0, rot: 0, order: 1 },
+            { type: "J", x: 2, y: 0, rot: 0, order: 2 },
+            { type: "I", x: 5, y: 0, rot: 1, order: 3 },
+            { type: "J", x: 3, y: 1, rot: 3, order: 4 },
+            { type: "I", x: 1, y: 4, rot: 0, order: 5 },
+            { type: "L", x: 0, y: 4, rot: 2, order: 6 },
+            { type: "J", x: 3, y: 4, rot: 2, order: 7 },
+            { type: "O", x: 4, y: 6, rot: 0, order: 8 },
+            { type: "I", x: 1, y: 8, rot: 0, order: 9 },
+            { type: "L", x: 0, y: 8, rot: 2, order: 10 },
+            { type: "J", x: 3, y: 8, rot: 2, order: 11 },
+          ],
+        },
+        {
+          pieces: [
+            { type: "O", x: 4, y: 0, rot: 0, order: 1 },
+            { type: "O", x: 4, y: 2, rot: 0, order: 2 },
+            { type: "I", x: 1, y: 4, rot: 0, order: 3 },
+            { type: "L", x: 0, y: 4, rot: 2, order: 4 },
+            { type: "J", x: 3, y: 4, rot: 2, order: 5 },
+            { type: "J", x: 0, y: 6, rot: 3, order: 6 },
+            { type: "L", x: 4, y: 6, rot: 1, order: 7 },
+            { type: "J", x: 0, y: 7, rot: 1, order: 8 },
+            { type: "L", x: 4, y: 7, rot: 3, order: 9 },
+          ],
+        },
+        {
+          pieces: [
+            { type: "O", x: 0, y: 0, rot: 0, order: 1 },
+            { type: "J", x: 2, y: 0, rot: 0, order: 2 },
+            { type: "I", x: 5, y: 0, rot: 1, order: 3 },
+            { type: "J", x: 3, y: 1, rot: 3, order: 4 },
+            { type: "I", x: 1, y: 4, rot: 0, order: 5 },
+            { type: "L", x: 0, y: 4, rot: 2, order: 6 },
+            { type: "J", x: 3, y: 4, rot: 2, order: 7 },
+            { type: "O", x: 0, y: 6, rot: 0, order: 8 },
+            { type: "I", x: 1, y: 8, rot: 0, order: 9 },
+            { type: "L", x: 0, y: 8, rot: 2, order: 10 },
+            { type: "J", x: 3, y: 8, rot: 2, order: 11 },
+          ],
+        },
+        {
+          pieces: [
+            { type: "J", x: 0, y: 0, rot: 0, order: 1 },
+            { type: "T", x: 3, y: 0, rot: 0, order: 2 },
+            { type: "J", x: 1, y: 1, rot: 0, order: 3 },
+            { type: "S", x: 4, y: 1, rot: 1, order: 4 },
+            { type: "I", x: 0, y: 2, rot: 3, order: 5 },
+            { type: "T", x: 4, y: 3, rot: 3, order: 6 },
+            { type: "S", x: 2, y: 4, rot: 0, order: 7 },
+            { type: "J", x: 1, y: 3, rot: 1, order: 8 },
+            { type: "O", x: 0, y: 6, rot: 0, order: 9 },
+            { type: "I", x: 1, y: 8, rot: 0, order: 10 },
+            { type: "L", x: 0, y: 8, rot: 2, order: 11 },
+            { type: "J", x: 3, y: 8, rot: 2, order: 12 },
+          ],
+        },
+        {
+          pieces: [
+            { type: "O", x: 4, y: 0, rot: 0, order: 1 },
+            { type: "L", x: 4, y: 2, rot: 1, order: 2 },
+            { type: "L", x: 4, y: 3, rot: 3, order: 3 },
+            { type: "O", x: 4, y: 6, rot: 0, order: 4 },
+            { type: "I", x: 1, y: 8, rot: 0, order: 5 },
+            { type: "L", x: 0, y: 8, rot: 2, order: 6 },
+            { type: "J", x: 3, y: 8, rot: 2, order: 7 },
+          ],
+        },
+        {
+          pieces: [
+            { type: "J", x: 0, y: 0, rot: 0, order: 1 },
+            { type: "L", x: 3, y: 0, rot: 0, order: 2 },
+            { type: "Z", x: 0, y: 1, rot: 0, order: 3 },
+            { type: "S", x: 3, y: 1, rot: 0, order: 4 },
+            { type: "L", x: 0, y: 3, rot: 1, order: 5 },
+            { type: "J", x: 4, y: 3, rot: 3, order: 6 },
+            { type: "I", x: 1, y: 4, rot: 0, order: 7 },
+            { type: "T", x: 0, y: 5, rot: 3, order: 8 },
+            { type: "L", x: 2, y: 5, rot: 0, order: 9 },
+            { type: "I", x: 5, y: 6, rot: 1, order: 10 },
+            { type: "T", x: 1, y: 8, rot: 0, order: 11 },
+            { type: "J", x: 0, y: 7, rot: 1, order: 12 },
+            { type: "L", x: 3, y: 7, rot: 3, order: 13 },
+          ],
+        },
+        {
+          pieces: [
+            { type: "O", x: 0, y: 0, rot: 0, order: 1 },
+            { type: "J", x: 2, y: 0, rot: 0, order: 2 },
+            { type: "J", x: 3, y: 0, rot: 2, order: 3 },
+            { type: "O", x: 4, y: 2, rot: 0, order: 4 },
+            { type: "I", x: 1, y: 4, rot: 0, order: 5 },
+            { type: "T", x: 0, y: 4, rot: 1, order: 6 },
+            { type: "L", x: 2, y: 5, rot: 0, order: 7 },
+            { type: "I", x: 5, y: 4, rot: 1, order: 8 },
+            { type: "S", x: 0, y: 6, rot: 3, order: 9 },
+            { type: "Z", x: 4, y: 7, rot: 1, order: 10 },
+            { type: "S", x: 2, y: 8, rot: 0, order: 11 },
+            { type: "T", x: 0, y: 8, rot: 2, order: 12 },
+          ],
+        },
+      ];
+
+      const COLORS = {
+        I: "#2EC4F1", // hsl(190, 85%, 55%)
+        O: "#FFD93D", // hsl(50, 90%, 60%)
+        T: "#9D5CFF", // hsl(270, 80%, 60%)
+        S: "#3FA34D", // hsl(130, 60%, 45%)
+        Z: "#FF4D4D", // hsl(0, 85%, 60%)
+        J: "#2F5BEA", // hsl(220, 75%, 50%)
+        L: "#FF8C1A", // hsl(30, 90%, 50%)
+      };
+
+      const SHAPES = {
+        I: {
+          0: [
+            [0, 0],
+            [1, 0],
+            [2, 0],
+            [3, 0],
+          ],
+          1: [
+            [0, 0],
+            [0, 1],
+            [0, 2],
+            [0, 3],
+          ],
+          2: [
+            [0, 0],
+            [1, 0],
+            [2, 0],
+            [3, 0],
+          ],
+          3: [
+            [0, 0],
+            [0, 1],
+            [0, 2],
+            [0, 3],
+          ],
+        },
+        O: {
+          0: [
+            [0, 0],
+            [1, 0],
+            [0, 1],
+            [1, 1],
+          ],
+          1: [
+            [0, 0],
+            [1, 0],
+            [0, 1],
+            [1, 1],
+          ],
+          2: [
+            [0, 0],
+            [1, 0],
+            [0, 1],
+            [1, 1],
+          ],
+          3: [
+            [0, 0],
+            [1, 0],
+            [0, 1],
+            [1, 1],
+          ],
+        },
+        L: {
+          0: [
+            [0, 0],
+            [1, 0],
+            [2, 0],
+            [2, 1],
+          ],
+          1: [
+            [0, 0],
+            [1, 0],
+            [0, 1],
+            [0, 2],
+          ],
+          2: [
+            [0, 1],
+            [1, 1],
+            [2, 1],
+            [0, 0],
+          ],
+          3: [
+            [1, 0],
+            [1, 1],
+            [0, 2],
+            [1, 2],
+          ],
+        },
+        J: {
+          0: [
+            [0, 0],
+            [1, 0],
+            [2, 0],
+            [0, 1],
+          ],
+          1: [
+            [0, 0],
+            [0, 1],
+            [0, 2],
+            [1, 2],
+          ],
+          2: [
+            [2, 0],
+            [0, 1],
+            [1, 1],
+            [2, 1],
+          ],
+          3: [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [1, 2],
+          ],
+        },
+        S: {
+          0: [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [2, 1],
+          ],
+          1: [
+            [1, 0],
+            [0, 1],
+            [1, 1],
+            [0, 2],
+          ],
+          2: [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [2, 1],
+          ],
+          3: [
+            [1, 0],
+            [0, 1],
+            [1, 1],
+            [0, 2],
+          ],
+        },
+        Z: {
+          0: [
+            [1, 0],
+            [2, 0],
+            [0, 1],
+            [1, 1],
+          ],
+          1: [
+            [0, 0],
+            [0, 1],
+            [1, 1],
+            [1, 2],
+          ],
+          2: [
+            [1, 0],
+            [2, 0],
+            [0, 1],
+            [1, 1],
+          ],
+          3: [
+            [0, 0],
+            [0, 1],
+            [1, 1],
+            [1, 2],
+          ],
+        },
+        T: {
+          0: [
+            [0, 0],
+            [1, 0],
+            [2, 0],
+            [1, 1],
+          ],
+          1: [
+            [0, 0],
+            [0, 1],
+            [1, 1],
+            [0, 2],
+          ],
+          2: [
+            [1, 0],
+            [0, 1],
+            [1, 1],
+            [2, 1],
+          ],
+          3: [
+            [1, 0],
+            [0, 1],
+            [1, 1],
+            [1, 2],
+          ],
+        },
+      };
+
+      const GRID_WIDTH = 6;
+      const GRID_HEIGHT = 16;
+      const BLOCK_SIZE = 20;
+
+      // --- アニメーションのパラメータ ---
+      const ACTION_INTERVAL = 7; // 横移動の速度
+      const ROTATE_INTERVAL = 7; // 回転の速度
+      const GRAVITY_INTERVAL = 7; // 自由落下の速度
+      const FALL_INTERVAL = 2; // ハードドロップの速度
+      const ACTION_DELAY = -20; // 出現直後のタメ（20フレーム待機）
+      const BLINK_FRAMES = 90; // 点滅の時間（1.5秒で3回点滅）
+
+      // 「1」が自然落下のみで落ち切る時間を計算し、それを全体の目標フレーム数（基準）にする
+      function calculateTargetTotalFrames() {
+        let total = 0;
+        const piecesOfOne = numbersData[1].pieces;
+        const startX = Math.floor(GRID_WIDTH / 2) - 1;
+
+        piecesOfOne.forEach((p) => {
+          let rotCount = p.rot === 1 || p.rot === 3 ? 1 : p.rot === 2 ? 2 : 0;
+          let moveCount = Math.abs(p.x - startX);
+          let opFrames =
+            Math.abs(ACTION_DELAY) +
+            rotCount * ROTATE_INTERVAL +
+            moveCount * ACTION_INTERVAL;
+          let fallFrames = (16 - p.y) * GRAVITY_INTERVAL;
+          total += Math.max(opFrames, fallFrames);
+        });
+        return total; // この数値に合わせて全数字が同期する
+      }
+      const TARGET_TOTAL_SEC = 10; // 50秒開始〜00秒完成に合わせる
+      const TARGET_FPS = 60;
+      const BLINK_SEC = BLINK_FRAMES / TARGET_FPS;
+      const TARGET_FALL_SEC = Math.max(0, TARGET_TOTAL_SEC - BLINK_SEC);
+      const MIN_TOTAL_FRAMES = calculateTargetTotalFrames();
+      const TARGET_TOTAL_FRAMES = Math.max(
+        MIN_TOTAL_FRAMES,
+        Math.round(TARGET_FALL_SEC * TARGET_FPS),
+      );
+
+      // --- ユーティリティ ---
+      function setupHiDpiCanvas(canvas, width, height) {
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        return ctx;
+      }
+
+      function drawGrid(ctx, width, height, customWidth = GRID_WIDTH) {
+        // grid disabled
+      }
+
+      // 斜め（対角線）で色が分かれるフラットデザイン
+      function drawSingleBlock(ctx, type, bx, by) {
+        const px = bx * BLOCK_SIZE;
+        const py = GRID_HEIGHT * BLOCK_SIZE - (by + 1) * BLOCK_SIZE;
+
+        // ベース色で全体を塗りつぶす
+        ctx.fillStyle = COLORS[type];
+        ctx.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
+
+        // 右上の三角形領域（少し濃いめ：黒を10%重ねる）
+        ctx.fillStyle = "rgba(0, 0, 0, 0.10)";
+        ctx.beginPath();
+        ctx.moveTo(px, py); // 左上
+        ctx.lineTo(px + BLOCK_SIZE, py); // 右上
+        ctx.lineTo(px + BLOCK_SIZE, py + BLOCK_SIZE); // 右下
+        ctx.closePath();
+        ctx.fill();
+
+        // 左下の三角形領域（少し薄め：白を10%重ねる）
+        ctx.fillStyle = "rgba(255, 255, 255, 0.10)";
+        ctx.beginPath();
+        ctx.moveTo(px, py); // 左上
+        ctx.lineTo(px + BLOCK_SIZE, py + BLOCK_SIZE); // 右下
+        ctx.lineTo(px, py + BLOCK_SIZE); // 左下
+        ctx.closePath();
+        ctx.fill();
+
+        // フラットな黒枠線（少しマイルドな黒）
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px + 0.5, py + 0.5, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
+      }
+
+      function isValid(type, x, rot) {
+        const shape = SHAPES[type][rot];
+        for (let i = 0; i < shape.length; i++) {
+          const bx = x + shape[i][0];
+          if (bx < 0 || bx >= GRID_WIDTH) return false;
+        }
+        return true;
+      }
+
+      // --- 数字（桁）を管理・描画するクラス ---
+      class Digit {
+        constructor(canvasId) {
+          this.canvas = document.getElementById(canvasId);
+          this.cssWidth = GRID_WIDTH * BLOCK_SIZE;
+          this.cssHeight = GRID_HEIGHT * BLOCK_SIZE;
+          this.ctx = setupHiDpiCanvas(
+            this.canvas,
+            this.cssWidth,
+            this.cssHeight,
+          );
+
+          this.num = 0;
+          this.pieces = [];
+          this.state = "IDLE";
+          this.blinkFrame = 0;
+
+          this.globalFrame = 0;
+          this.nextPieceIndex = 0;
+          this.activePieces = [];
+          this.placedPieces = [];
+          this.spawnTimes = [];
+        }
+
+        setNumber(n) {
+          this.num = n;
+          this.pieces = [...numbersData[n].pieces].sort(
+            (a, b) => a.order - b.order,
+          );
+          this.state = "IDLE";
+        }
+
+        transitionTo(n) {
+          if (this.num === n) return;
+          this.nextNum = n;
+          this.state = "BLINK";
+          this.blinkFrame = 0;
+        }
+
+        // 各ピースの出現時刻（spawnTime）を計算する
+        calculateSchedules() {
+          let reqFramesList = [];
+          const startX = Math.floor(GRID_WIDTH / 2) - 1;
+
+          this.pieces.forEach((p) => {
+            let rotCount = p.rot === 1 || p.rot === 3 ? 1 : p.rot === 2 ? 2 : 0;
+            let moveCount = Math.abs(p.x - startX);
+            let opFrames =
+              Math.abs(ACTION_DELAY) +
+              rotCount * ROTATE_INTERVAL +
+              moveCount * ACTION_INTERVAL;
+            let fallFrames = (16 - p.y) * GRAVITY_INTERVAL;
+
+            // このピースが着地・ロックされるまでに最低限必要なフレーム数
+            let reqF = Math.max(opFrames, fallFrames);
+            reqFramesList.push(reqF);
+          });
+
+          // 最初のピースは0フレーム目に出現
+          let startTime = 0;
+          // 最後のピースはTARGET_TOTAL_FRAMESぴったりに着地するように出現
+          let endTime =
+            TARGET_TOTAL_FRAMES - reqFramesList[this.pieces.length - 1];
+
+          this.spawnTimes = [];
+          if (this.pieces.length === 1) {
+            this.spawnTimes.push(endTime);
+          } else {
+            // 最初と最後の間を等間隔で割って出現させる
+            for (let i = 0; i < this.pieces.length; i++) {
+              let t =
+                startTime +
+                (endTime - startTime) * (i / (this.pieces.length - 1));
+              this.spawnTimes.push(Math.floor(t));
+            }
+          }
+        }
+
+        spawnPiece(index) {
+          const p = this.pieces[index];
+          const startX = Math.floor(GRID_WIDTH / 2) - 1;
+
+          // キュー生成
+          let actionQueue = [];
+          if (p.rot === 1) {
+            actionQueue.push("ROT_R");
+          }
+          if (p.rot === 2) {
+            actionQueue.push("ROT_R");
+            actionQueue.push("ROT_R");
+          }
+          if (p.rot === 3) {
+            actionQueue.push("ROT_L");
+          }
+
+          let dx = p.x - startX;
+          while (dx > 0) {
+            actionQueue.push("RIGHT");
+            dx--;
+          }
+          while (dx < 0) {
+            actionQueue.push("LEFT");
+            dx++;
+          }
+
+          this.activePieces.push({
+            type: p.type,
+            targetX: p.x,
+            targetY: p.y,
+            targetRot: p.rot,
+            curX: startX,
+            curY: GRID_HEIGHT,
+            curRot: 0,
+            animState: "FALLING", // 自然落下と操作を並行する
+            actionTimer: ACTION_DELAY,
+            gravityTimer: 0,
+            queue: actionQueue,
+          });
+
+          this.nextPieceIndex = index + 1;
+        }
+
+        update() {
+          if (this.state === "BLINK") {
+            this.blinkFrame++;
+            // 90フレーム経過で消去状態から落下開始へ
+            if (this.blinkFrame >= BLINK_FRAMES) {
+              this.state = "FALLING";
+              this.num = this.nextNum;
+              this.pieces = [...numbersData[this.num].pieces].sort(
+                (a, b) => a.order - b.order,
+              );
+              this.calculateSchedules();
+              this.placedPieces = [];
+              this.activePieces = [];
+              this.nextPieceIndex = 0;
+              this.globalFrame = 0;
+            }
+          } else if (this.state === "FALLING") {
+            this.updateFalling();
+          }
+        }
+
+        updateFalling() {
+          // 次のピースの出現判定
+          if (this.nextPieceIndex < this.pieces.length) {
+            if (this.globalFrame >= this.spawnTimes[this.nextPieceIndex]) {
+              this.spawnPiece(this.nextPieceIndex);
+            }
+          }
+
+          // アクティブなピースの更新（自由落下と操作のみ。ハードドロップは行わない）
+          for (let i = this.activePieces.length - 1; i >= 0; i--) {
+            let pc = this.activePieces[i];
+
+            if (pc.animState === "FALLING") {
+              // 自由落下
+              pc.gravityTimer++;
+              if (pc.gravityTimer >= GRAVITY_INTERVAL) {
+                pc.gravityTimer = 0;
+                if (pc.curY > pc.targetY) {
+                  pc.curY--;
+                }
+              }
+
+              // 操作キューの消化
+              pc.actionTimer++;
+              if (pc.actionTimer >= 0 && pc.queue.length > 0) {
+                let nextAction = pc.queue[0];
+                let reqInterval = nextAction.startsWith("ROT")
+                  ? ROTATE_INTERVAL
+                  : ACTION_INTERVAL;
+
+                if (pc.actionTimer >= reqInterval) {
+                  pc.actionTimer = 0;
+                  const action = pc.queue.shift();
+
+                  if (action === "RIGHT") pc.curX++;
+                  if (action === "LEFT") pc.curX--;
+                  if (action === "ROT_R") pc.curRot = (pc.curRot + 1) % 4;
+                  if (action === "ROT_L") pc.curRot = (pc.curRot + 3) % 4;
+                }
+              }
+
+              // 着地・ロック判定
+              if (pc.queue.length === 0 && pc.curY <= pc.targetY) {
+                pc.curY = pc.targetY;
+                pc.animState = "LOCK";
+              }
+            }
+          }
+
+          // LOCK状態になったものを placedPieces に移す
+          for (let i = this.activePieces.length - 1; i >= 0; i--) {
+            if (this.activePieces[i].animState === "LOCK") {
+              this.placedPieces.push(this.activePieces[i]);
+              this.activePieces.splice(i, 1);
+            }
+          }
+
+          this.globalFrame++;
+
+          // 全て着地し、目標フレームを過ぎたら完了
+          if (
+            this.placedPieces.length === this.pieces.length &&
+            this.globalFrame >= TARGET_TOTAL_FRAMES
+          ) {
+            this.state = "IDLE";
+          }
+        }
+
+        draw() {
+          this.ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
+          drawGrid(this.ctx, this.cssWidth, this.cssHeight);
+
+          if (this.state === "IDLE") {
+            this.drawComplete(this.pieces);
+          } else if (this.state === "BLINK") {
+            // 3回点滅（15フレームごとにON/OFF切り替え。最後は非表示(OFF)で終わる）
+            if (Math.floor(this.blinkFrame / 15) % 2 === 0) {
+              this.drawComplete([...numbersData[this.num].pieces]);
+            }
+          } else if (this.state === "FALLING") {
+            // 設置済み
+            this.placedPieces.forEach((p) => {
+              const shape = SHAPES[p.type][p.targetRot];
+              shape.forEach((b) =>
+                drawSingleBlock(
+                  this.ctx,
+                  p.type,
+                  p.targetX + b[0],
+                  p.targetY + b[1],
+                ),
+              );
+            });
+            // 落下中
+            this.activePieces.forEach((p) => {
+              const shape = SHAPES[p.type][p.curRot];
+              shape.forEach((b) =>
+                drawSingleBlock(this.ctx, p.type, p.curX + b[0], p.curY + b[1]),
+              );
+            });
+          }
+        }
+
+        drawComplete(piecesArray) {
+          piecesArray.forEach((p) => {
+            const shape = SHAPES[p.type][p.rot];
+            shape.forEach((b) =>
+              drawSingleBlock(this.ctx, p.type, p.x + b[0], p.y + b[1]),
+            );
+          });
+        }
+      }
+
+      // --- コロンを描画するクラス ---
+      class Colon {
+        constructor(canvasId) {
+          this.canvas = document.getElementById(canvasId);
+          // 横4マス
+          this.cssWidth = 4 * BLOCK_SIZE;
+          this.cssHeight = GRID_HEIGHT * BLOCK_SIZE;
+          this.ctx = setupHiDpiCanvas(
+            this.canvas,
+            this.cssWidth,
+            this.cssHeight,
+          );
+        }
+
+        draw() {
+          this.ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
+          drawGrid(this.ctx, this.cssWidth, this.cssHeight, 4);
+
+          const O_shape = [
+            [0, 0],
+            [1, 0],
+            [0, 1],
+            [1, 1],
+          ];
+          const baseX = 1; // 横2, 3マス目
+
+          const drawO = (by) => {
+            O_shape.forEach((b) => {
+              drawSingleBlock(this.ctx, "O", baseX + b[0], by + b[1]);
+            });
+          };
+
+          // 上下中央（y=2 と y=6 に配置して余白2マスずつ）
+          drawO(2);
+          drawO(6);
+        }
+      }
+
+      // --- メインループ ---
+      let digits = [];
+      let colon;
+      let lastTransitionMinute = null;
+
+      function getHHMM(date) {
+        const h = String(date.getHours()).padStart(2, "0");
+        const m = String(date.getMinutes()).padStart(2, "0");
+        return [parseInt(h[0]), parseInt(h[1]), parseInt(m[0]), parseInt(m[1])];
+      }
+
+      window.onload = () => {
+        digits = [
+          new Digit("digit-h1"),
+          new Digit("digit-h2"),
+          new Digit("digit-m1"),
+          new Digit("digit-m2"),
+        ];
+        colon = new Colon("colon");
+
+        const initialDigits = getHHMM(new Date());
+        for (let i = 0; i < 4; i++) {
+          digits[i].setNumber(initialDigits[i]);
+        }
+
+        function gameLoop() {
+          const now = new Date();
+          const sec = now.getSeconds();
+          const minute = now.getMinutes();
+
+          // 時刻が変わる10秒前（50秒）に点滅開始
+          if (sec === 50 && lastTransitionMinute !== minute) {
+            const nextDate = new Date(now.getTime() + 10000);
+            const nextDigits = getHHMM(nextDate);
+            const currentDigits = getHHMM(now);
+
+            for (let i = 0; i < 4; i++) {
+              if (currentDigits[i] !== nextDigits[i]) {
+                digits[i].transitionTo(nextDigits[i]);
+              }
+            }
+            lastTransitionMinute = minute;
+          }
+
+          // フレーム落ち等で 50秒トリガーを逃した場合のリカバリ
+          // 50-59秒の間は「次の分」を表示するのが意図なので、その基準で同期
+          const allIdle = digits.every((d) => d.state === "IDLE");
+          if (allIdle) {
+            const targetDate =
+              sec >= 50 ? new Date(now.getTime() + 10000) : now;
+            const currentDigits = getHHMM(targetDate);
+            let mismatch = false;
+            for (let i = 0; i < 4; i++) {
+              if (digits[i].num !== currentDigits[i]) {
+                mismatch = true;
+                break;
+              }
+            }
+            if (mismatch) {
+              for (let i = 0; i < 4; i++) {
+                if (digits[i].num !== currentDigits[i]) {
+                  digits[i].transitionTo(currentDigits[i]);
+                }
+              }
+            }
+          }
+
+          colon.draw();
+          digits.forEach((d) => {
+            d.update();
+            d.draw();
+          });
+
+          requestAnimationFrame(gameLoop);
+        }
+
+        requestAnimationFrame(gameLoop);
+      };
+    </script>
+  </body>
+</html>
